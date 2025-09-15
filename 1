@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>修真放置游戏·剧情主线版</title>
+  <style>
+    body { font-family: 'SimHei', sans-serif; background: #0d0d0d; color: #f0f0f0; margin: 0; padding: 0; }
+    h1 { color: #ffcc00; text-align: center; padding: 20px; }
+    .container { display: flex; flex-direction: row; height: 100vh; }
+    .left, .right { width: 25%; padding: 15px; background: #1a1a1a; overflow-y: auto; }
+    .center { flex: 1; padding: 15px; background: #111; overflow-y: auto; text-align: center; }
+    .section { margin-bottom: 20px; border: 1px solid #333; border-radius: 8px; padding: 10px; background: #222; }
+    .btn { padding: 8px 16px; margin: 5px; border: none; border-radius: 6px; background: #333; color: #fff; font-size: 14px; cursor: pointer; }
+    .btn:hover { background: #444; }
+    #log { max-height: 200px; overflow-y: auto; text-align: left; background: #111; padding: 10px; border-radius: 6px; font-size: 14px; }
+    h2 { color: #ff9933; }
+    .stat { margin: 5px 0; }
+    #chapterPanel { display: none; margin-top: 15px; }
+  </style>
+</head>
+<body>
+  <h1>修真放置游戏·剧情主线版</h1>
+  <div class="container">
+    <div class="left">
+      <div class="section">
+        <h2>角色面板</h2>
+        <p class="stat">姓名：<span id="playerName">无名散修</span></p>
+        <p class="stat">境界：<span id="realm">炼体期</span></p>
+        <p class="stat">灵气：<span id="qi">0</span></p>
+        <p class="stat">战斗力：<span id="power">10</span></p>
+        <p class="stat">宗门：<span id="sect">无门无派</span></p>
+        <p class="stat">修炼道路：<span id="path">未定</span></p>
+        <p class="stat">法宝：<span id="treasures">无</span></p>
+      </div>
+      <div class="section">
+        <h2>操作</h2>
+        <button class="btn" id="cultivateBtn">修炼一次</button>
+        <button class="btn" id="breakthroughBtn">突破境界</button>
+        <button class="btn" id="joinSectBtn">拜入宗门</button>
+        <button class="btn" id="findTreasureBtn">探索法宝</button>
+        <button class="btn" id="battleBtn">战斗试炼</button>
+      </div>
+    </div>
+
+    <div class="center">
+      <div class="section">
+        <h2>日志</h2>
+        <div id="log"></div>
+        <div id="chapterPanel">
+          <h3 id="chapterTitle"></h3>
+          <p id="chapterStory"></p>
+          <div id="chapterChoices"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="section">
+        <h2>宗门面板</h2>
+        <p>宗门名：<span id="sectName">无</span></p>
+        <p>宗门等级：<span id="sectLevel">0</span></p>
+        <p>宗门声望：<span id="sectReputation">0</span></p>
+        <p>弟子数量：<span id="disciples">0</span></p>
+        <button class="btn" id="upgradeSectBtn">提升宗门</button>
+        <button class="btn" id="recruitDiscipleBtn">收录弟子</button>
+        <button class="btn" id="trainDisciplesBtn">训练弟子</button>
+        <button class="btn" id="sendMissionBtn">派遣任务</button>
+      </div>
+      <div class="section">
+        <h2>NPC互动</h2>
+        <button class="btn" id="interactNPCBtn">与修士交流</button>
+        <button class="btn" id="npcQuestBtn">接受任务</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let qi = 0;
+    let qiPerSecond = 1;
+    let realmIndex = 0;
+    let power = 10;
+    let sect = "无门无派";
+    let treasures = [];
+    let sectLevel = 0;
+    let sectReputation = 0;
+    let disciples = 0;
+    let path = "未定";
+    let chapterIndex = 0;
+
+    const realms = ["炼体期", "筑基期", "结丹期", "元婴期", "化神期", "飞升"];
+    const realmCosts = [100, 1000, 10000, 50000, 200000, 1000000];
+
+    const chapters = [
+      {
+        title: "凡人起步",
+        story: "你是一个凡人，偶然得到一本破旧的修炼心法，是否选择踏入修真之路？",
+        condition: () => qi >= 50,
+        choices: [
+          { text: "是，我要修炼！", effect: () => { qiPerSecond += 1; updateDisplay("你踏入了修真之路，灵气开始流转。"); } },
+          { text: "否，凡人安稳即可。", effect: () => { updateDisplay("你选择继续做凡人，游戏结束。"); stopGame(); } }
+        ]
+      },
+      {
+        title: "筑基劫难",
+        story: "你成功筑基，雷劫来袭，你将选择哪条修炼道路？",
+        condition: () => realmIndex >= 1,
+        choices: [
+          { text: "剑修：以剑入道", effect: () => { path = "剑修"; power += 30; updateDisplay("你选择剑修，剑心通明。"); } },
+          { text: "体修：以力证道", effect: () => { path = "体修"; power += 50; updateDisplay("你选择体修，肉身无双。"); } },
+          { text: "丹修：以丹养道", effect: () => { path = "丹修"; qiPerSecond *= 1.5; updateDisplay("你选择丹修，丹火长存。"); } },
+          { text: "魔修：以心御魔", effect: () => { path = "魔修"; power += 40; qiPerSecond *= 0.8; updateDisplay("你选择魔修，魔气缠身。"); } }
+        ]
+      },
+      {
+        title: "宗门纷争",
+        story: "宗门内部动荡，你将选择立场？",
+        condition: () => sectLevel >= 2,
+        choices: [
+          { text: "拥护宗主", effect: () => { sectReputation += 20; updateDisplay("你坚定支持宗主，宗门奖励你功法。声望+20。"); } },
+          { text: "支持叛变长老", effect: () => { power += 50; updateDisplay("你加入了叛变长老阵营，实力大涨但声望受损。"); sectReputation -= 15; } }
+        ]
+      },
+      {
+        title: "飞升之劫",
+        story: "你即将迎来飞升雷劫，选择接受还是抗拒天道？",
+        condition: () => realmIndex >= realms.length - 1,
+        choices: [
+          { text: "接受天道考验", effect: () => { updateDisplay("你飞升成仙，羽化登仙！"); stopGame(); } },
+          { text: "逆天而行", effect: () => { updateDisplay("你选择逆天而行，堕魔成尊！"); stopGame(); } }
+        ]
+      }
+    ];
+
+    function updateDisplay(msg = null) {
+      document.getElementById('qi').textContent = Math.floor(qi);
+      document.getElementById('realm').textContent = realms[realmIndex];
+      document.getElementById('power').textContent = power;
+      document.getElementById('sect').textContent = sect;
+      document.getElementById('treasures').textContent = treasures.length > 0 ? treasures.join("，") : "无";
+      document.getElementById('sectName').textContent = sect;
+      document.getElementById('sectLevel').textContent = sectLevel;
+      document.getElementById('sectReputation').textContent = sectReputation;
+      document.getElementById('disciples').textContent = disciples;
+      document.getElementById('path').textContent = path;
+      if (msg) {
+        let log = document.getElementById('log');
+        log.innerHTML = `<div>> ${msg}</div>` + log.innerHTML;
+      }
+      checkChapters();
+    }
+
+    function checkChapters() {
+      if (chapterIndex < chapters.length && chapters[chapterIndex].condition()) {
+        triggerChapter(chapters[chapterIndex]);
+        chapterIndex++;
+      }
+    }
+
+    function triggerChapter(chapter) {
+      document.getElementById('chapterPanel').style.display = 'block';
+      document.getElementById('chapterTitle').textContent = chapter.title;
+      document.getElementById('chapterStory').textContent = chapter.story;
+      const choiceDiv = document.getElementById('chapterChoices');
+      choiceDiv.innerHTML = '';
+      chapter.choices.forEach(choice => {
+        let btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = choice.text;
+        btn.onclick = () => {
+          choice.effect();
+          document.getElementById('chapterPanel').style.display = 'none';
+        };
+        choiceDiv.appendChild(btn);
+      });
+    }
+
+    function stopGame() {
+      clearInterval(autoCultivate);
+    }
+
+    function cultivate() {
+      qi += qiPerSecond;
+      updateDisplay("你闭目打坐，灵气在体内经脉流转。");
+    }
+
+    function breakthrough() {
+      if (realmIndex >= realms.length - 1) {
+        updateDisplay("你已飞升成仙，凡尘不再束缚你。");
+        return;
+      }
+      if (qi >= realmCosts[realmIndex]) {
+        qi -= realmCosts[realmIndex];
+        realmIndex++;
+        qiPerSecond *= 2;
+        power += 20;
+        updateDisplay("你突破到 " + realms[realmIndex] + "！灵气增长速度翻倍，战斗力提升！");
+      } else {
+        updateDisplay("灵气不足，突破失败！你感到气血翻涌。");
+      }
+    }
+
+    function joinSect() {
+      if (sect !== "无门无派") {
+        updateDisplay("你已身在宗门，不可轻易更换。");
+        return;
+      }
+      const sects = ["太虚观", "玄天宗", "天机门", "焚天谷"];
+      sect = sects[Math.floor(Math.random() * sects.length)];
+      sectLevel = 1;
+      sectReputation = 10;
+      qiPerSecond += 2;
+      power += 15;
+      updateDisplay("你拜入了 " + sect + " ，宗门传授功法，修炼速度加快！");
+    }
+
+    function findTreasure() {
+      const possibleTreasures = ["飞剑", "法袍", "灵丹", "灵兽"];
+      const t = possibleTreasures[Math.floor(Math.random() * possibleTreasures.length)];
+      treasures.push(t);
+      power += 15;
+      updateDisplay("你在秘境中探索，获得了法宝：" + t + "！战斗力提升。");
+    }
+
+    function battle() {
+      const enemyPower = Math.floor(Math.random() * 50) + 20;
+      if (power >= enemyPower) {
+        qi += 150;
+        sectReputation += 5;
+        updateDisplay("你击败了敌人，灵气暴涨，宗门声望提升！+150 灵气");
+      } else {
+        updateDisplay("你遭遇强敌，战斗失败，受伤闭关疗养。");
+      }
+    }
+
+    function upgradeSect() {
+      if (sect === "无门无派") {
+        updateDisplay("你尚未加入宗门。");
+        return;
+      }
+      if (sectReputation >= 20 * sectLevel) {
+        sectReputation -= 20 * sectLevel;
+        sectLevel++;
+        qiPerSecond += 3;
+        power += 25;
+        updateDisplay(sect + " 宗门等级提升至 " + sectLevel + "！弟子云集，实力大涨。");
+      } else {
+        updateDisplay("声望不足，无法提升宗门等级。");
+      }
+    }
+
+    function recruitDisciple() {
+      if (sect === "无门无派") {
+        updateDisplay("你尚未加入宗门，无法收录弟子。");
+        return;
+      }
+      disciples++;
+      sectReputation += 2;
+      updateDisplay("你收录了一名弟子，宗门弟子数增加至 " + disciples + "。");
+    }
+
+    function trainDisciples() {
+      if (disciples === 0) {
+        updateDisplay("宗门无弟子可训练。");
+        return;
+      }
+      power += disciples * 2;
+      sectReputation += disciples;
+      updateDisplay("你训练弟子，宗门实力增强，战斗力提升 " + (disciples*2) + "！");
+    }
+
+    function sendMission() {
+      if (disciples === 0) {
+        updateDisplay("宗门无弟子可派遣。");
+        return;
+      }
+      const success = Math.random() > 0.3;
+      if (success) {
+        qi += disciples * 50;
+        sectReputation += disciples * 5;
+        updateDisplay("弟子完成任务，带回灵气 " + (disciples*50) + " 与声望 " + (disciples*5) + "！");
+      } else {
+        sectReputation -= 5;
+        updateDisplay("弟子任务失败，宗门声望降低。");
+      }
+    }
+
+    function interactNPC() {
+      const interactions = [
+        "你与一位同门师兄切磋，受益匪浅。",
+        "你在宗门大殿聆听长老讲道，修为精进。",
+        "你结识了一位散修道友，互换心得。",
+        "一名神秘修士忽然出现，留下了一卷功法秘籍。"
+      ];
+      const event = interactions[Math.floor(Math.random() * interactions.length)];
+      qi += 50;
+      updateDisplay(event + " 获得额外灵气+50。");
+    }
+
+    function npcQuest() {
+      const quests = [
+        "清理附近妖兽",
+        "采集千年灵草",
+        "护送宗门弟子下山",
+        "侦查敌对宗门动向"
+      ];
+      const quest = quests[Math.floor(Math.random() * quests.length)];
+      const success = Math.random() > 0.3;
+      if (success) {
+        qi += 200;
+        sectReputation += 10;
+        power += 10;
+        updateDisplay("你完成了任务：" + quest + "！灵气+200，声望+10，战斗力+10。");
+      } else {
+        updateDisplay("任务失败：" + quest + "。你受了些伤，修养一段时间。");
+      }
+    }
+
+    let autoCultivate = setInterval(() => {
+      qi += qiPerSecond;
+      updateDisplay();
+    }, 1000);
+
+    // 将按钮
