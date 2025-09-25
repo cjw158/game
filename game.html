@@ -17,6 +17,9 @@
     h2 { color: #ff9933; }
     .stat { margin: 5px 0; }
     #chapterPanel { display: none; margin-top: 15px; }
+    .save-load { margin-top: 10px; }
+    .progress-bar { width: 100%; background: #333; border-radius: 4px; overflow: hidden; margin: 5px 0; }
+    .progress-fill { height: 15px; background: linear-gradient(90deg, #4CAF50, #2196F3); transition: width 0.3s; }
   </style>
 </head>
 <body>
@@ -32,6 +35,12 @@
         <p class="stat">宗门：<span id="sect">无门无派</span></p>
         <p class="stat">修炼道路：<span id="path">未定</span></p>
         <p class="stat">法宝：<span id="treasures">无</span></p>
+        <div class="stat">
+          突破进度：
+          <div class="progress-bar">
+            <div class="progress-fill" id="breakthroughProgress" style="width: 0%"></div>
+          </div>
+        </div>
       </div>
       <div class="section">
         <h2>操作</h2>
@@ -40,6 +49,12 @@
         <button class="btn" id="joinSectBtn">拜入宗门</button>
         <button class="btn" id="findTreasureBtn">探索法宝</button>
         <button class="btn" id="battleBtn">战斗试炼</button>
+      </div>
+      <div class="section save-load">
+        <h2>游戏存档</h2>
+        <button class="btn" id="saveBtn">保存游戏</button>
+        <button class="btn" id="loadBtn">加载游戏</button>
+        <button class="btn" id="resetBtn">重新开始</button>
       </div>
     </div>
 
@@ -76,6 +91,7 @@
   </div>
 
   <script>
+    // 游戏状态变量
     let qi = 0;
     let qiPerSecond = 1;
     let realmIndex = 0;
@@ -87,9 +103,11 @@
     let disciples = 0;
     let path = "未定";
     let chapterIndex = 0;
+    let playerName = "无名散修";
 
-    const realms = ["炼体期", "筑基期", "结丹期", "元婴期", "化神期", "飞升"];
-    const realmCosts = [100, 1000, 10000, 50000, 200000, 1000000];
+    // 游戏配置数据
+    const realms = ["炼体期", "筑基期", "结丹期", "元婴期", "化神期", "合体期", "大乘期", "飞升"];
+    const realmCosts = [100, 1000, 10000, 50000, 200000, 1000000, 5000000, 20000000];
 
     const chapters = [
       {
@@ -122,16 +140,34 @@
         ]
       },
       {
+        title: "秘境探索",
+        story: "你发现了一个远古秘境，里面蕴含着强大的力量，但也充满危险。",
+        condition: () => realmIndex >= 3,
+        choices: [
+          { text: "深入探索", effect: () => { 
+            if (Math.random() > 0.5) {
+              qi += 5000; power += 100; treasures.push("远古神器");
+              updateDisplay("你在秘境深处获得了远古神器，实力大增！");
+            } else {
+              qi = Math.max(0, qi - 1000);
+              updateDisplay("你在秘境中遇险，损失了部分修为。");
+            }
+          }},
+          { text: "谨慎撤退", effect: () => { qi += 1000; sectReputation += 10; updateDisplay("你明智地选择撤退，保存实力。"); } }
+        ]
+      },
+      {
         title: "飞升之劫",
         story: "你即将迎来飞升雷劫，选择接受还是抗拒天道？",
         condition: () => realmIndex >= realms.length - 1,
         choices: [
-          { text: "接受天道考验", effect: () => { updateDisplay("你飞升成仙，羽化登仙！"); stopGame(); } },
-          { text: "逆天而行", effect: () => { updateDisplay("你选择逆天而行，堕魔成尊！"); stopGame(); } }
+          { text: "接受天道考验", effect: () => { updateDisplay("你飞升成仙，羽化登仙！恭喜通关！"); stopGame(); } },
+          { text: "逆天而行", effect: () => { updateDisplay("你选择逆天而行，堕魔成尊！另类通关！"); stopGame(); } }
         ]
       }
     ];
 
+    // 游戏核心函数
     function updateDisplay(msg = null) {
       document.getElementById('qi').textContent = Math.floor(qi);
       document.getElementById('realm').textContent = realms[realmIndex];
@@ -143,9 +179,21 @@
       document.getElementById('sectReputation').textContent = sectReputation;
       document.getElementById('disciples').textContent = disciples;
       document.getElementById('path').textContent = path;
+      document.getElementById('playerName').textContent = playerName;
+      
+      // 更新突破进度条
+      if (realmIndex < realmCosts.length) {
+        const progress = (qi / realmCosts[realmIndex]) * 100;
+        document.getElementById('breakthroughProgress').style.width = Math.min(progress, 100) + '%';
+      }
+      
       if (msg) {
         let log = document.getElementById('log');
         log.innerHTML = `<div>> ${msg}</div>` + log.innerHTML;
+        // 限制日志长度
+        if (log.children.length > 50) {
+          log.removeChild(log.lastChild);
+        }
       }
       checkChapters();
     }
@@ -177,16 +225,18 @@
 
     function stopGame() {
       clearInterval(autoCultivate);
+      updateDisplay("游戏结束！感谢游玩！");
     }
 
+    // 游戏操作函数
     function cultivate() {
-      qi += qiPerSecond;
+      qi += qiPerSecond * 10;
       updateDisplay("你闭目打坐，灵气在体内经脉流转。");
     }
 
     function breakthrough() {
       if (realmIndex >= realms.length - 1) {
-        updateDisplay("你已飞升成仙，凡尘不再束缚你。");
+        updateDisplay("你已达到最高境界，准备飞升吧。");
         return;
       }
       if (qi >= realmCosts[realmIndex]) {
@@ -196,7 +246,7 @@
         power += 20;
         updateDisplay("你突破到 " + realms[realmIndex] + "！灵气增长速度翻倍，战斗力提升！");
       } else {
-        updateDisplay("灵气不足，突破失败！你感到气血翻涌。");
+        updateDisplay("灵气不足，突破失败！还需要 " + (realmCosts[realmIndex] - qi) + " 灵气。");
       }
     }
 
@@ -205,7 +255,7 @@
         updateDisplay("你已身在宗门，不可轻易更换。");
         return;
       }
-      const sects = ["太虚观", "玄天宗", "天机门", "焚天谷"];
+      const sects = ["太虚观", "玄天宗", "天机门", "焚天谷", "万剑宗", "丹霞派"];
       sect = sects[Math.floor(Math.random() * sects.length)];
       sectLevel = 1;
       sectReputation = 10;
@@ -215,21 +265,29 @@
     }
 
     function findTreasure() {
-      const possibleTreasures = ["飞剑", "法袍", "灵丹", "灵兽"];
+      const possibleTreasures = ["飞剑", "法袍", "灵丹", "灵兽", "护身符", "储物戒", "仙草", "灵石"];
       const t = possibleTreasures[Math.floor(Math.random() * possibleTreasures.length)];
       treasures.push(t);
-      power += 15;
-      updateDisplay("你在秘境中探索，获得了法宝：" + t + "！战斗力提升。");
+      power += Math.floor(Math.random() * 20) + 10;
+      qi += Math.floor(Math.random() * 200) + 50;
+      updateDisplay("你在秘境中探索，获得了法宝：" + t + "！战斗力和灵气都有提升。");
     }
 
     function battle() {
-      const enemyPower = Math.floor(Math.random() * 50) + 20;
+      const enemyPower = Math.floor(Math.random() * (power * 0.8)) + Math.floor(power * 0.2);
+      const enemyNames = ["邪修", "妖兽", "魔头", "敌宗弟子", "散修恶徒"];
+      const enemyName = enemyNames[Math.floor(Math.random() * enemyNames.length)];
+      
       if (power >= enemyPower) {
-        qi += 150;
-        sectReputation += 5;
-        updateDisplay("你击败了敌人，灵气暴涨，宗门声望提升！+150 灵气");
+        const reward = Math.floor(Math.random() * 300) + 100;
+        qi += reward;
+        sectReputation += Math.floor(Math.random() * 10) + 5;
+        power += Math.floor(Math.random() * 5) + 1;
+        updateDisplay(`你击败了${enemyName}(战力${enemyPower})，获得灵气+${reward}，声望提升！`);
       } else {
-        updateDisplay("你遭遇强敌，战斗失败，受伤闭关疗养。");
+        const loss = Math.floor(Math.random() * 100) + 50;
+        qi = Math.max(0, qi - loss);
+        updateDisplay(`你遭遇强敌${enemyName}(战力${enemyPower})，战斗失败，损失${loss}灵气。`);
       }
     }
 
@@ -238,14 +296,15 @@
         updateDisplay("你尚未加入宗门。");
         return;
       }
-      if (sectReputation >= 20 * sectLevel) {
-        sectReputation -= 20 * sectLevel;
+      const cost = 20 * sectLevel;
+      if (sectReputation >= cost) {
+        sectReputation -= cost;
         sectLevel++;
         qiPerSecond += 3;
         power += 25;
         updateDisplay(sect + " 宗门等级提升至 " + sectLevel + "！弟子云集，实力大涨。");
       } else {
-        updateDisplay("声望不足，无法提升宗门等级。");
+        updateDisplay("声望不足，需要 " + cost + " 声望才能提升宗门等级。");
       }
     }
 
@@ -276,11 +335,13 @@
       }
       const success = Math.random() > 0.3;
       if (success) {
-        qi += disciples * 50;
-        sectReputation += disciples * 5;
-        updateDisplay("弟子完成任务，带回灵气 " + (disciples*50) + " 与声望 " + (disciples*5) + "！");
+        const qiReward = disciples * (Math.floor(Math.random() * 50) + 50);
+        const repReward = disciples * (Math.floor(Math.random() * 5) + 3);
+        qi += qiReward;
+        sectReputation += repReward;
+        updateDisplay("弟子完成任务，带回灵气 " + qiReward + " 与声望 " + repReward + "！");
       } else {
-        sectReputation -= 5;
+        sectReputation = Math.max(0, sectReputation - 5);
         updateDisplay("弟子任务失败，宗门声望降低。");
       }
     }
@@ -290,11 +351,14 @@
         "你与一位同门师兄切磋，受益匪浅。",
         "你在宗门大殿聆听长老讲道，修为精进。",
         "你结识了一位散修道友，互换心得。",
-        "一名神秘修士忽然出现，留下了一卷功法秘籍。"
+        "一名神秘修士忽然出现，留下了一卷功法秘籍。",
+        "你参加了修真界的论道大会，见识大涨。",
+        "一位前辈赠送给你一颗丹药。"
       ];
       const event = interactions[Math.floor(Math.random() * interactions.length)];
-      qi += 50;
-      updateDisplay(event + " 获得额外灵气+50。");
+      const reward = Math.floor(Math.random() * 100) + 50;
+      qi += reward;
+      updateDisplay(event + " 获得额外灵气+" + reward + "。");
     }
 
     function npcQuest() {
@@ -302,23 +366,102 @@
         "清理附近妖兽",
         "采集千年灵草",
         "护送宗门弟子下山",
-        "侦查敌对宗门动向"
+        "侦查敌对宗门动向",
+        "寻找失踪的师弟",
+        "探索古老遗迹"
       ];
       const quest = quests[Math.floor(Math.random() * quests.length)];
       const success = Math.random() > 0.3;
       if (success) {
-        qi += 200;
-        sectReputation += 10;
-        power += 10;
-        updateDisplay("你完成了任务：" + quest + "！灵气+200，声望+10，战斗力+10。");
+        const qiReward = Math.floor(Math.random() * 200) + 150;
+        const repReward = Math.floor(Math.random() * 10) + 8;
+        const powerReward = Math.floor(Math.random() * 10) + 5;
+        qi += qiReward;
+        sectReputation += repReward;
+        power += powerReward;
+        updateDisplay("你完成了任务：" + quest + "！灵气+" + qiReward + "，声望+" + repReward + "，战斗力+" + powerReward + "。");
       } else {
         updateDisplay("任务失败：" + quest + "。你受了些伤，修养一段时间。");
       }
     }
 
+    // 存档功能
+    function saveGame() {
+      const gameState = {
+        qi, qiPerSecond, realmIndex, power, sect, treasures,
+        sectLevel, sectReputation, disciples, path, chapterIndex, playerName
+      };
+      localStorage.setItem('cultivationGameSave', JSON.stringify(gameState));
+      updateDisplay("游戏已保存！");
+    }
+
+    function loadGame() {
+      const saved = localStorage.getItem('cultivationGameSave');
+      if (saved) {
+        const gameState = JSON.parse(saved);
+        qi = gameState.qi || 0;
+        qiPerSecond = gameState.qiPerSecond || 1;
+        realmIndex = gameState.realmIndex || 0;
+        power = gameState.power || 10;
+        sect = gameState.sect || "无门无派";
+        treasures = gameState.treasures || [];
+        sectLevel = gameState.sectLevel || 0;
+        sectReputation = gameState.sectReputation || 0;
+        disciples = gameState.disciples || 0;
+        path = gameState.path || "未定";
+        chapterIndex = gameState.chapterIndex || 0;
+        playerName = gameState.playerName || "无名散修";
+        updateDisplay("游戏已加载！");
+      } else {
+        updateDisplay("没有找到存档文件。");
+      }
+    }
+
+    function resetGame() {
+      if (confirm("确定要重新开始游戏吗？所有进度将丢失！")) {
+        qi = 0;
+        qiPerSecond = 1;
+        realmIndex = 0;
+        power = 10;
+        sect = "无门无派";
+        treasures = [];
+        sectLevel = 0;
+        sectReputation = 0;
+        disciples = 0;
+        path = "未定";
+        chapterIndex = 0;
+        playerName = "无名散修";
+        document.getElementById('log').innerHTML = '';
+        updateDisplay("游戏已重置！");
+      }
+    }
+
+    // 绑定按钮事件
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('cultivateBtn').addEventListener('click', cultivate);
+      document.getElementById('breakthroughBtn').addEventListener('click', breakthrough);
+      document.getElementById('joinSectBtn').addEventListener('click', joinSect);
+      document.getElementById('findTreasureBtn').addEventListener('click', findTreasure);
+      document.getElementById('battleBtn').addEventListener('click', battle);
+      document.getElementById('upgradeSectBtn').addEventListener('click', upgradeSect);
+      document.getElementById('recruitDiscipleBtn').addEventListener('click', recruitDisciple);
+      document.getElementById('trainDisciplesBtn').addEventListener('click', trainDisciples);
+      document.getElementById('sendMissionBtn').addEventListener('click', sendMission);
+      document.getElementById('interactNPCBtn').addEventListener('click', interactNPC);
+      document.getElementById('npcQuestBtn').addEventListener('click', npcQuest);
+      document.getElementById('saveBtn').addEventListener('click', saveGame);
+      document.getElementById('loadBtn').addEventListener('click', loadGame);
+      document.getElementById('resetBtn').addEventListener('click', resetGame);
+
+      // 初始化显示
+      updateDisplay("欢迎来到修真世界！开始你的修仙之路吧！");
+    });
+
+    // 自动修炼
     let autoCultivate = setInterval(() => {
       qi += qiPerSecond;
       updateDisplay();
     }, 1000);
-
-    // 将按钮
+  </script>
+</body>
+</html>
